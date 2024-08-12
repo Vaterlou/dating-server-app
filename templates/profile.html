@@ -1,0 +1,56 @@
+<!-- templates/profile.html -->
+{% extends "base.html" %}
+
+{% block title %}Профиль{% endblock %}
+
+{% block content %}
+    <h2>Профиль</h2>
+    <button id="get-profile">Получить профиль</button>
+    <div id="profile-info"></div>
+
+    <h2>Обновить профиль</h2>
+    <form id="profile-form">
+        <input type="text" id="profile-bio" placeholder="Биография">
+        <input type="number" id="profile-age" placeholder="Возраст">
+        <input type="text" id="profile-gender" placeholder="Пол">
+        <button type="submit">Обновить профиль</button>
+    </form>
+{% endblock %}
+
+{% block scripts %}
+document.getElementById('get-profile').addEventListener('click', function() {
+    fetch(`${apiUrl}/profile`, {
+        method: 'GET',
+        credentials: 'include', // Важно для использования сессий и cookies
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Profile:', data);
+        const profileInfo = document.getElementById('profile-info');
+        profileInfo.innerHTML = `
+            <p>Биография: ${data.bio}</p>
+            <p>Возраст: ${data.age}</p>
+            <p>Пол: ${data.gender}</p>
+        `;
+    })
+    .catch(error => {
+        console.error('Profile Error:', error);
+    });
+});
+
+document.getElementById('profile-form').addEventListener('submit', function(event) {
+    event.preventDefault();
+
+    const data = {
+        bio: document.getElementById('profile-bio').value,
+        age: document.getElementById('profile-age').value,
+        gender: document.getElementById('profile-gender').value
+    };
+
+    fetch(`${apiUrl}/profile`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data),
+        credentials: '

@@ -1,0 +1,24 @@
+<!-- templates/base.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Взаимодействие с API{% endblock %}</title>
+</head>
+<body>
+    {% if current_user.is_authenticated %}
+        <nav>
+            <ul>
+                <li><a href="{{ url_for('main.profile') }}">Профиль</a></li>
+                <li><a href="{{ url_for('main.upload_picture') }}">Загрузить фото</a></li>
+                <li><a href="{{ url_for('main.users') }}">Пользователи</a></li>
+                <li><form action="{{ url_for('main.logout') }}" method="post"><button type="submit">Выйти</button></form></li>
+            </ul>
+        </nav>
+    {% endif %}
+    <div class="content">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>
