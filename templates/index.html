@@ -3,351 +3,464 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Взаимодействие с API</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+    <title>Сервис знакомств</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        label {
+            display: block;
+            margin-top: 10px;
+        }
+        input, textarea, select, button {
+            margin-top: 5px;
+            padding: 8px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        button {
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        h2, h3 {
+            margin-top: 30px;
+        }
+        #profile-picture {
+            margin-top: 10px;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            background-color: #f2f2f2;
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const apiUrl = 'http://192.168.101.3:8000'; // Замените на ваш URL
+    const apiUrl = 'http://127.0.0.1:8000'; // Замените на ваш URL
 
-            // Определяем функции отображения секций
-            function showAuthSection() {
-                document.getElementById('auth-section').style.display = 'block';
-                document.getElementById('profile-section').style.display = 'none';
-                document.getElementById('messages-section').style.display = 'none';
-                document.getElementById('users-section').style.display = 'none';
+    const map = L.map('map').setView([-8.651244, 115.216667], 10);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+    }).addTo(map);
+
+    // Определяем функции отображения секций
+    function showAuthSection() {
+        document.getElementById('auth-section').style.display = 'block';
+        document.getElementById('profile-section').style.display = 'none';
+        document.getElementById('messages-section').style.display = 'none';
+        document.getElementById('users-section').style.display = 'none';
+        document.getElementById('matches-section').style.display = 'none';
+    }
+
+    function showProfileSection() {
+        document.getElementById('auth-section').style.display = 'none';
+        document.getElementById('profile-section').style.display = 'block';
+        document.getElementById('messages-section').style.display = 'none';
+        document.getElementById('users-section').style.display = 'none';
+        document.getElementById('matches-section').style.display = 'none';
+    }
+
+    function showMessagesSection() {
+        document.getElementById('auth-section').style.display = 'none';
+        document.getElementById('profile-section').style.display = 'none';
+        document.getElementById('messages-section').style.display = 'block';
+        document.getElementById('users-section').style.display = 'none';
+        document.getElementById('matches-section').style.display = 'none';
+    }
+
+    function showUsersSection() {
+        document.getElementById('auth-section').style.display = 'none';
+        document.getElementById('profile-section').style.display = 'none';
+        document.getElementById('messages-section').style.display = 'none';
+        document.getElementById('users-section').style.display = 'block';
+        map.invalidateSize();
+        document.getElementById('matches-section').style.display = 'none';
+    }
+
+    function showMatchesSection() {
+        document.getElementById('auth-section').style.display = 'none';
+        document.getElementById('profile-section').style.display = 'none';
+        document.getElementById('messages-section').style.display = 'none';
+        document.getElementById('matches-section').style.display = 'block';
+        document.getElementById('users-section').style.display = 'none';
+    }
+
+    window.showMessagesSection = showMessagesSection;
+    window.showUsersSection = showUsersSection;
+    window.showProfileSection = showProfileSection;
+    window.showAuthSection = showAuthSection;
+    window.showMatchesSection = showMatchesSection;
+
+
+    function checkToken() {
+        fetch(`${apiUrl}/check_token`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
             }
-
-            function showProfileSection() {
-                document.getElementById('auth-section').style.display = 'none';
-                document.getElementById('profile-section').style.display = 'block';
-                document.getElementById('messages-section').style.display = 'none';
-                document.getElementById('users-section').style.display = 'none';
-            }
-
-            function showMessagesSection() {
-                document.getElementById('auth-section').style.display = 'none';
-                document.getElementById('profile-section').style.display = 'none';
-                document.getElementById('messages-section').style.display = 'block';
-                document.getElementById('users-section').style.display = 'none';
-            }
-
-            function showUsersSection() {
-                document.getElementById('auth-section').style.display = 'none';
-                document.getElementById('profile-section').style.display = 'none';
-                document.getElementById('messages-section').style.display = 'none';
-                document.getElementById('users-section').style.display = 'block';
-            }
-
-            if (localStorage.getItem('token')) {
-                checkToken();
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.valid) {
+                showProfileSection();
             } else {
                 showAuthSection();
             }
-
-            document.getElementById('login-form').addEventListener('submit', function(event) {
-                event.preventDefault();
-                const data = {
-                    email: document.getElementById('login-email').value,
-                    password: document.getElementById('login-password').value
-                };
-                fetch(`${apiUrl}/login`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(data)
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.token) {
-                        localStorage.setItem('token', data.token);
-                        showProfileSection();
-                    } else {
-                        alert(data.error || 'Login failed.');
-                    }
-                });
-            });
-
-            document.getElementById('register-form').addEventListener('submit', function(event) {
-                event.preventDefault();
-                const data = {
-                    username: document.getElementById('register-username').value,
-                    email: document.getElementById('register-email').value,
-                    password: document.getElementById('register-password').value
-                };
-                fetch(`${apiUrl}/register`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(data)
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.message) {
-                        alert(data.message);
-                        showAuthSection();
-                    } else {
-                        alert(data.errors || 'Registration failed.');
-                    }
-                });
-            });
-
-            document.getElementById('get-profile').addEventListener('click', function() {
-                fetch(`${apiUrl}/profile`, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    const profileInfo = document.getElementById('profile-info');
-                    const profilePicture = data.profile_picture ? `<img src="${apiUrl}/static/profile_pics/${data.profile_picture}" alt="Profile Picture" style="max-width: 150px; max-height: 150px;">` : '';
-                    profileInfo.innerHTML = `
-                        ${profilePicture}
-                        <p>Биография: ${data.bio}</p>
-                        <p>Возраст: ${data.age}</p>
-                        <p>Пол: ${data.gender}</p>
-                        <p>Геопозиция: ${data.latitude}, ${data.longitude}</p>
-                    `;
-                })
-                .catch(error => {
-                    console.error('Profile Error:', error);
-                });
-            });
-
-            document.getElementById('profile-form').addEventListener('submit', function(event) {
-                event.preventDefault();
-                const data = {
-                    bio: document.getElementById('profile-bio').value,
-                    age: document.getElementById('profile-age').value,
-                    gender: document.getElementById('profile-gender').value
-                };
-                if (navigator.geolocation) {
-                    navigator.geolocation.getCurrentPosition(function(position) {
-                        data.latitude = position.coords.latitude;
-                        data.longitude = position.coords.longitude;
-
-                        sendProfileUpdate(data);
-                    }, function(error) {
-                        switch(error.code) {
-                            case error.PERMISSION_DENIED:
-                                alert("Пользователь отказал в разрешении на определение геопозиции.");
-                                break;
-                            case error.POSITION_UNAVAILABLE:
-                                alert("Информация о местоположении недоступна.");
-                                break;
-                            case error.TIMEOUT:
-                                alert("Время ожидания ответа от службы геолокации истекло.");
-                                break;
-                            case error.UNKNOWN_ERROR:
-                                alert("Произошла неизвестная ошибка.");
-                                break;
-                        }
-                        sendProfileUpdate(data);
-                    });
-                } else {
-                    alert('Ваш браузер не поддерживает геолокацию.');
-                    sendProfileUpdate(data);
-                }
-            });
-
-            function sendProfileUpdate(data) {
-                fetch(`${apiUrl}/profile`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    },
-                    body: JSON.stringify(data)
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.message) {
-                        alert('Профиль успешно обновлен!');
-                    } else {
-                        alert(data.error || 'Profile update failed.');
-                    }
-                })
-                .catch(error => {
-                    console.error('Profile Update Error:', error);
-                });
-            }
-
-            document.getElementById('upload-form').addEventListener('submit', function(event) {
-                event.preventDefault();
-                const formData = new FormData();
-                const fileField = document.getElementById('profile-picture');
-                if (fileField.files.length === 0) {
-                    alert('Please select a file.');
-                    return;
-                }
-                formData.append('file', fileField.files[0]);
-
-                fetch(`${apiUrl}/upload_profile_picture`, {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.message) {
-                        alert('Фото профиля успешно загружено!');
-                    } else {
-                        alert(data.error || 'File upload failed.');
-                    }
-                })
-                .catch(error => {
-                    console.error('File Upload Error:', error);
-                });
-            });
-
-            document.getElementById('get-messages').addEventListener('click', function() {
-                fetch(`${apiUrl}/messages`, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    const receivedMessages = data.received_messages || []; // Если данные отсутствуют, используем пустой массив
-                    const sentMessages = data.sent_messages || [];
-
-                    const receivedList = document.getElementById('received-messages-list');
-                    const sentList = document.getElementById('sent-messages-list');
-
-                    receivedList.innerHTML = '';
-                    sentList.innerHTML = '';
-
-                    receivedMessages.forEach(message => {
-                        const messageItem = document.createElement('li');
-                        messageItem.innerHTML = `<strong>От:</strong> ${message.sender} <br> <strong>Сообщение:</strong> ${message.body} <br> <strong>Время:</strong> ${message.timestamp}`;
-                        receivedList.appendChild(messageItem);
-                    });
-
-                    sentMessages.forEach(message => {
-                        const messageItem = document.createElement('li');
-                        messageItem.innerHTML = `<strong>Кому:</strong> ${message.recipient} <br> <strong>Сообщение:</strong> ${message.body} <br> <strong>Время:</strong> ${message.timestamp}`;
-                        sentList.appendChild(messageItem);
-                    });
-
-                    showMessagesSection();
-                })
-                .catch(error => {
-                    console.error('Messages Error:', error);
-                });
-            });
-
-            document.getElementById('get-users').addEventListener('click', function() {
-                const radius = document.getElementById('radius-input').value || 0;
-                fetch(`${apiUrl}/users?radius=${radius}`, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    const usersList = document.getElementById('users-list');
-                    usersList.innerHTML = '';
-
-                    data.users.forEach(user => {
-                        const userItem = document.createElement('li');
-                        userItem.innerHTML = `
-                            <p><strong>Имя:</strong> ${user.username}</p>
-                            <p><strong>Возраст:</strong> ${user.age}</p>
-                            <p><strong>Пол:</strong> ${user.gender}</p>
-                            <button onclick="likeUser('${user.id}')">Лайк</button>
-                            <button onclick="viewMatches('${user.id}')">Просмотр мэтч аккаунтов</button>
-                        `;
-                        usersList.appendChild(userItem);
-                    });
-
-                    showUsersSection();
-                })
-                .catch(error => {
-                    console.error('Users Error:', error);
-                });
-            });
-
-            window.likeUser = function(userId) {
-                fetch(`${apiUrl}/like/${userId}`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.message) {
-                        alert('User liked successfully!');
-                    } else {
-                        alert(data.error || 'Like failed.');
-                    }
-                })
-                .catch(error => {
-                    console.error('Like Error:', error);
-                });
-            };
-
-            window.viewMatches = function(userId) {
-                fetch(`${apiUrl}/matches/${userId}`, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    const matchesList = document.getElementById('matches-list');
-                    matchesList.innerHTML = '';
-
-                    data.matches.forEach(match => {
-                        const matchItem = document.createElement('li');
-                        matchItem.innerHTML = `
-                            <p><strong>Имя:</strong> ${match.username}</p>
-                            <button onclick="sendMessage('${match.id}')">Отправить сообщение</button>
-                        `;
-                        matchesList.appendChild(matchItem);
-                    });
-
-                    showMessagesSection();
-                })
-                .catch(error => {
-                    console.error('Matches Error:', error);
-                });
-            };
-
-            window.sendMessage = function(recipientId) {
-                const messageBody = prompt("Введите ваше сообщение:");
-                if (messageBody) {
-                    fetch(`${apiUrl}/messages`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('token')}`
-                        },
-                        body: JSON.stringify({ recipient: recipientId, body: messageBody })
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.message) {
-                            alert('Message sent successfully!');
-                        } else {
-                            alert(data.error || 'Message sending failed.');
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Send Message Error:', error);
-                    });
-                }
-            };
+        })
+        .catch(error => {
+            console.error('Token Check Error:', error);
+            showAuthSection();
         });
+    }
+
+    if (localStorage.getItem('token')) {
+        checkToken();
+    } else {
+        showAuthSection();
+    }
+
+    // Обработчики событий
+    document.getElementById('login-form').addEventListener('submit', function(event) {
+        event.preventDefault();
+        const data = {
+            email: document.getElementById('login-email').value,
+            password: document.getElementById('login-password').value
+        };
+        fetch(`${apiUrl}/login`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.token) {
+                localStorage.setItem('token', data.token);
+                showProfileSection();
+            } else {
+                alert(data.error || 'Login failed.');
+            }
+        });
+    });
+
+    document.getElementById('register-form').addEventListener('submit', function(event) {
+        event.preventDefault();
+        const data = {
+            username: document.getElementById('register-username').value,
+            email: document.getElementById('register-email').value,
+            password: document.getElementById('register-password').value
+        };
+        fetch(`${apiUrl}/register`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.message) {
+                alert(data.message);
+                showAuthSection();
+            } else {
+                alert(data.errors || 'Registration failed.');
+            }
+        });
+    });
+
+    document.getElementById('get-profile').addEventListener('click', function() {
+        fetch(`${apiUrl}/profile`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            const profileInfo = document.getElementById('profile-info');
+            const profilePicture = data.profile_picture ? `<img src="${apiUrl}/static/profile_pics/${data.profile_picture}" alt="Profile Picture" style="max-width: 150px; max-height: 150px;">` : '';
+            profileInfo.innerHTML = `
+                ${profilePicture}
+                <p>Биография: ${data.bio}</p>
+                <p>Возраст: ${data.age}</p>
+                <p>Пол: ${data.gender}</p>
+                <p>Геопозиция: ${data.latitude}, ${data.longitude}</p>
+            `;
+        })
+        .catch(error => {
+            console.error('Profile Error:', error);
+        });
+    });
+
+    document.getElementById('profile-form').addEventListener('submit', function(event) {
+        event.preventDefault();
+        const data = {
+            bio: document.getElementById('profile-bio').value,
+            age: document.getElementById('profile-age').value,
+            gender: document.getElementById('profile-gender').value
+        };
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(function(position) {
+                data.latitude = position.coords.latitude;
+                data.longitude = position.coords.longitude;
+
+                sendProfileUpdate(data);
+            }, function(error) {
+                switch(error.code) {
+                    case error.PERMISSION_DENIED:
+                        alert("Пользователь отказал в разрешении на определение геопозиции.");
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        alert("Информация о местоположении недоступна.");
+                        break;
+                    case error.TIMEOUT:
+                        alert("Время ожидания ответа от службы геолокации истекло.");
+                        break;
+                    case error.UNKNOWN_ERROR:
+                        alert("Произошла неизвестная ошибка.");
+                        break;
+                }
+                sendProfileUpdate(data);
+            });
+        } else {
+            alert('Ваш браузер не поддерживает геолокацию.');
+            sendProfileUpdate(data);
+        }
+    });
+
+    function sendProfileUpdate(data) {
+        fetch(`${apiUrl}/profile`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.message) {
+                alert('Профиль успешно обновлен!');
+            } else {
+                alert(data.error || 'Profile update failed.');
+            }
+        })
+        .catch(error => {
+            console.error('Profile Update Error:', error);
+        });
+    }
+
+    document.getElementById('upload-form').addEventListener('submit', function(event) {
+        event.preventDefault();
+        const formData = new FormData();
+        const fileField = document.getElementById('profile-picture');
+        if (fileField.files.length === 0) {
+            alert('Please select a file.');
+            return;
+        }
+        formData.append('file', fileField.files[0]);
+
+        fetch(`${apiUrl}/upload_profile_picture`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.message) {
+                alert('Фото профиля успешно загружено!');
+            } else {
+                alert(data.error || 'File upload failed.');
+            }
+        })
+        .catch(error => {
+            console.error('File Upload Error:', error);
+        });
+    });
+
+    document.getElementById('get-messages').addEventListener('click', function() {
+        fetch(`${apiUrl}/messages`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            const receivedMessages = data.received_messages || [];
+            const sentMessages = data.sent_messages || [];
+
+            const receivedList = document.getElementById('received-messages-list');
+            const sentList = document.getElementById('sent-messages-list');
+
+            receivedList.innerHTML = '';
+            sentList.innerHTML = '';
+
+            receivedMessages.forEach(message => {
+                const messageItem = document.createElement('li');
+                messageItem.innerHTML = `<strong>От:</strong> ${message.sender} <br> <strong>Сообщение:</strong> ${message.body} <br> <strong>Время:</strong> ${message.timestamp}`;
+                receivedList.appendChild(messageItem);
+            });
+
+            sentMessages.forEach(message => {
+                const messageItem = document.createElement('li');
+                messageItem.innerHTML = `<strong>Кому:</strong> ${message.recipient} <br> <strong>Сообщение:</strong> ${message.body} <br> <strong>Время:</strong> ${message.timestamp}`;
+                sentList.appendChild(messageItem);
+            });
+
+            showMessagesSection();
+        })
+        .catch(error => {
+            console.error('Messages Error:', error);
+        });
+    });
+
+    document.getElementById('get-users').addEventListener('click', function() {
+        const radius = document.getElementById('radius-input').value;
+
+        fetch(`${apiUrl}/users?radius=${radius}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            const usersList = document.getElementById('users-list');
+            usersList.innerHTML = '';
+
+            data.users.forEach(user => {
+                const userItem = document.createElement('li');
+                const profilePicture = user.profile_picture ? `<img src="${apiUrl}/static/profile_pics/${user.profile_picture}" alt="Profile Picture" style="max-width: 150px; max-height: 150px;">` : '';
+
+                userItem.innerHTML = `
+                    ${profilePicture}
+                    <p><strong>Имя:</strong> ${user.username}</p>
+                    <p><strong>Возраст:</strong> ${user.age}</p>
+                    <p><strong>Пол:</strong> ${user.gender}</p>
+                    <p><strong>Биография:</strong> ${user.bio}</p>
+                    <p><strong>Геопозиция:</strong> ${data.latitude}, ${data.longitude}</p>
+                    <button onclick="likeUser('${user.id}')">Лайк</button>
+                `;
+
+                addUserMarker(user);
+                usersList.appendChild(userItem);
+            });
+
+            showUsersSection();
+        })
+        .catch(error => {
+            console.error('Users Error:', error);
+        });
+    });
+
+    document.getElementById('get-matches').addEventListener('click', function() {
+        fetch(`${apiUrl}/matches`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            const matchesList = document.getElementById('matches-list');
+            matchesList.innerHTML = '';
+
+            data.matches.forEach(match => {
+                const matchItem = document.createElement('li');
+                const profilePicture = match.profile_picture ? `<img src="${apiUrl}/static/profile_pics/${match.profile_picture}" alt="Profile Picture" style="max-width: 150px; max-height: 150px;">` : '';
+
+                matchItem.innerHTML = `
+                    ${profilePicture}
+                    <p><strong>Имя:</strong> ${match.username}</p>
+                    <p><strong>Возраст:</strong> ${match.age}</p>
+                    <p><strong>Пол:</strong> ${match.gender}</p>
+                    <p><strong>Биография:</strong> ${match.bio}</p>
+                    <p><strong>Геопозиция:</strong> ${match.latitude}, ${match.longitude}</p>
+                    <button onclick="sendMessage('${match.id}')">Отправить сообщение</button>
+                `;
+                matchesList.appendChild(matchItem);
+            });
+
+            showMatchesSection();
+        })
+        .catch(error => {
+            console.error('Matches Error:', error);
+        });
+    });
+
+    window.likeUser = function(userId) {
+        fetch(`${apiUrl}/like`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ liked_user_id: userId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.message) {
+                alert('Пользователь успешно лайкнут!');
+            } else {
+                alert(data.error || 'Не удалось лайкнуть пользователя.');
+            }
+        })
+        .catch(error => {
+            console.error('Like Error:', error);
+        });
+    };
+
+    window.addUserMarker = function(user) {
+        const marker = L.marker([user.latitude, user.longitude]).addTo(map);
+        marker.bindPopup(`<b>${user.username}</b><br>Возраст: ${user.age}<br>Биография: ${user.bio}`).openPopup();
+    }
+
+    window.sendMessage = function(recipientId) {
+        const messageBody = prompt("Введите ваше сообщение:");
+        if (messageBody) {
+            fetch(`${apiUrl}/send_message`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({ recipient: recipientId, body: messageBody })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.message) {
+                    alert('Сообщение успешно отправлено!');
+                } else {
+                    alert(data.error || 'Не удалось отправить сообщение.');
+                }
+            })
+            .catch(error => {
+                console.error('Send Message Error:', error);
+            });
+        }
+    };
+});
     </script>
-</head>
 <body>
     <div id="auth-section">
         <h2>Вход</h2>
@@ -392,23 +505,36 @@
             <input type="file" id="profile-picture" accept="image/*">
             <button type="submit">Загрузить</button>
         </form>
+
+        <button onclick="showMessagesSection()">Сообщения</button>
+        <button onclick="showUsersSection()">Пользователи</button>
+        <button onclick="showMatchesSection()">Мэтчи</button>
     </div>
 
     <div id="messages-section" style="display:none;">
         <h2>Сообщения</h2>
         <button id="get-messages">Получить сообщения</button>
+        <h3>Полученные сообщения</h3>
         <ul id="received-messages-list"></ul>
+        <h3>Отправленные сообщения</h3>
         <ul id="sent-messages-list"></ul>
-        <h3>Просмотр мэтч аккаунтов</h3>
-        <ul id="matches-list"></ul>
+        <button onclick="showProfileSection()">Назад в профиль</button>
     </div>
 
     <div id="users-section" style="display:none;">
         <h2>Пользователи</h2>
         <label for="radius-input">Радиус поиска (км):</label>
-        <input type="number" id="radius-input" min="0" value="10">
-        <button id="get-users">Получить пользователей</button>
+        <input type="number" id="radius-input" placeholder="Введите радиус поиска">
+        <button id="get-users">Показать пользователей</button>
         <ul id="users-list"></ul>
+        <div id="map" style="height: 500px; width: 100%; margin-top: 20px;"></div>
+        <button onclick="showProfileSection()">Назад в профиль</button>
+    </div>
+    <div id="matches-section" style="display:none;">
+        <h2>Пользователи</h2>
+        <button id="get-matches">Показать мэтчи</button>
+        <ul id="matches-list"></ul>
+        <button onclick="showProfileSection()">Назад в профиль</button>
     </div>
 </body>
 </html>

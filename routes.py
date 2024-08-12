@@ -176,6 +176,7 @@ def users():
                         continue
 
             user_info = {
+                'id' : user.id,
                 'username': user.username,
                 'email': user.email,
                 'bio': profile.bio,
@@ -187,7 +188,7 @@ def users():
             }
             users_list.append(user_info)
 
-    return jsonify(users_list), 200
+    return jsonify({'users': users_list}), 200
 
 
 @main.route('/send_message', methods=['POST'])
@@ -196,7 +197,7 @@ def send_message():
     data = request.get_json()
     user_id = get_jwt_identity()
     sender = User.query.get(user_id)
-    recipient = User.query.filter_by(email=data['recipient']).first()
+    recipient = User.query.get(data['recipient'])
 
     if not recipient:
         return jsonify({'error': 'Recipient not found.'}), 404
@@ -286,13 +287,16 @@ def get_matches():
 
     # Получаем всех пользователей, с которыми есть совпадения
     matches = Match.query.filter_by(user_id=user_id, is_mutual=True).all()
-    matched_users = [
-        {
+    matched_users = []
+    for match in matches:
+        matched_info = {
+            'id': match.liked_user.id,
             'username': match.liked_user.username,
             'email': match.liked_user.email,
             'bio': match.liked_user.profile.bio,
             'age': match.liked_user.profile.age,
-            'gender': match.liked_user.profile.gender
-        } for match in matches
-    ]
+            'gender': match.liked_user.profile.gender,
+            'profile_picture': match.liked_user.profile.profile_picture
+        }
+        matched_users.append(matched_info)
     return jsonify({'matches': matched_users}), 200
