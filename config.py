@@ -2,8 +2,9 @@
 import os
 
 class Config:
-    UPLOAD_FOLDER = 'static/profile_pics'
-    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+    UPLOAD_PROFILE_FOLDER = 'static/profile_pics'
+    UPLOAD_MEDIA_FOLDER = 'static/uploads/'
+    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'mp4', 'mov'}
     SQLALCHEMY_DATABASE_URI = 'sqlite:///dating_app.db'  # Используем SQLite для простоты
     ALLOWED_COUNTRIES = ["Russia", "Indonesia"]
     # ALLOWED_CITIES

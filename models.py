@@ -8,13 +8,10 @@ db = SQLAlchemy()
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
+    username = db.Column(db.String(80), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
     profile = db.relationship('Profile', backref='user', uselist=False)
-
-    sent_messages = db.relationship('Message', foreign_keys='Message.sender_id', backref='author', lazy='dynamic')
-    received_messages = db.relationship('Message', foreign_keys='Message.recipient_id', backref='receiver', lazy='dynamic')
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -39,9 +36,10 @@ class Profile(db.Model):
 
 class Message(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    sender_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    recipient_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    sender_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    recipient_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
     body = db.Column(db.Text, nullable=False)
+    media_url = db.Column(db.String(100), nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
     sender = db.relationship('User', foreign_keys=[sender_id], backref='sent_msgs')

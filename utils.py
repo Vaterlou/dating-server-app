@@ -1,6 +1,11 @@
 # utils.py
 import math
 import requests
+from flask import current_app
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in current_app.config['ALLOWED_EXTENSIONS']
 
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371.0  # Радиус Земли в километрах

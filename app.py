@@ -10,14 +10,13 @@ from routes import main
 from config import Config
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
+from flask_migrate import Migrate
 
 app = Flask(__name__)
 CORS(app) #FOR DEBUG
 app.config.from_object(Config)
 db.init_app(app)
-
-app.config['UPLOAD_FOLDER'] = Config.UPLOAD_FOLDER
-app.config['ALLOWED_EXTENSIONS'] = Config.ALLOWED_EXTENSIONS
+migrate = Migrate(app, db)
 
 app.config['JWT_SECRET_KEY'] = 'your_jwt_secret_key'  # Замените на свой секретный ключ
 

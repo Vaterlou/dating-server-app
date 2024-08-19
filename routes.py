@@ -1,19 +1,23 @@
 import os
+from distutils.command.config import config
+from pyexpat.errors import messages
 
 import bp
-from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, current_app
 from flask_login import login_user, login_required, logout_user, current_user
 from werkzeug.utils import secure_filename
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+
+from sqlalchemy import or_
 
 from models import db
 from models import User
 from models import Profile
 from models import Message
 from models import Match
-from forms import LoginForm, ProfileForm, RegisterForm
-from config import Config
+
 from utils import haversine
+from utils import allowed_file
 from utils import get_country_by_coordinates
 
 main = Blueprint('main', __name__)
@@ -56,7 +60,11 @@ def login():
     user = User.query.filter_by(email=email).first()
     if user and user.check_password(password):
         token = create_access_token(identity=user.id)
-        return jsonify({'token': token, 'message': 'Login successful!'}), 200
+        if not user.profile:
+            profile = Profile(user_id=user.id)
+            db.session.add(profile)
+            db.session.commit()
+        return jsonify({'token': token, 'user_id': user.id, 'message': 'Login successful!'}), 200
     else:
         return jsonify({'error': 'Invalid email or password'}), 401
 
@@ -65,23 +73,41 @@ def login():
 @main.route('/profile', methods=['GET', 'POST'])
 @jwt_required()
 def profile():
-    user_id = get_jwt_identity()
-
     if request.method == 'POST':
-        data = request.json
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found.'}), 404
+
         profile = Profile.query.filter_by(user_id=user_id).first()
 
         if not profile:
             profile = Profile(user_id=user_id)
             db.session.add(profile)
 
-        profile.bio = data.get('bio')
-        profile.age = data.get('age')
+        if 'avatar' not in request.files:
+            return jsonify({'error': 'No avatar part in the request'}), 400
+
+        file = request.files['avatar']
+
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            file_path = os.path.join(current_app.config['UPLOAD_PROFILE_FOLDER'], filename)
+            file.save(file_path)
+            user.profile.profile_picture = filename
+        else:
+            return jsonify({'error': 'Invalid file type'}), 400
+
+        profile.bio = request.form.get('bio')
+        profile.age = request.form.get('age')
         # profile.nationality = data.get('nationality')
         # profile.height = data.get('height')
-        profile.gender = data.get('gender')
-        profile.latitude = data.get('latitude')
-        profile.longitude = data.get('longitude')
+        profile.gender = request.form.get('gender')
+        profile.latitude = request.form.get('latitude')
+        profile.longitude = request.form.get('longitude')
 
         # country = data.get('country')
         # if country is not None and profile.latitude is not None and profile.longitude is not None:
@@ -99,6 +125,9 @@ def profile():
         return jsonify({'message': 'Profile updated!'}), 200
 
     elif request.method == 'GET':
+        user_id = request.args.get('user_id')
+        if user_id is not None:
+            user_id = get_jwt_identity()
         profile = Profile.query.filter_by(user_id=user_id).first()
         if profile:
             profile_data = {
@@ -111,40 +140,6 @@ def profile():
             }
             return jsonify(profile_data), 200
         return jsonify({'message': 'Profile not found.'}), 404
-
-
-
-def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in Config.ALLOWED_EXTENSIONS
-
-
-@main.route('/upload_profile_picture', methods=['POST'])
-@jwt_required()
-def upload_profile_picture():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part in the request'}), 400
-
-    file = request.files['file']
-
-    if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
-
-    if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(Config.UPLOAD_FOLDER, filename)
-        file.save(file_path)
-
-        user_id = get_jwt_identity()
-        user = User.query.get(user_id)
-        if user:
-            user.profile.profile_picture = filename
-            db.session.commit()
-            return jsonify({'message': 'Profile picture uploaded successfully!'}), 200
-
-        return jsonify({'error': 'User not found.'}), 404
-
-    return jsonify({'error': 'Invalid file type'}), 400
 
 
 @main.route('/users', methods=['GET'])
@@ -175,6 +170,10 @@ def users():
                     if distance > radius:
                         continue
 
+            existing_like = Match.query.filter_by(user_id=user_id, liked_user_id=user.id).first()
+            if existing_like:
+                continue
+
             user_info = {
                 'id' : user.id,
                 'username': user.username,
@@ -194,48 +193,81 @@ def users():
 @main.route('/send_message', methods=['POST'])
 @jwt_required()
 def send_message():
-    data = request.get_json()
     user_id = get_jwt_identity()
     sender = User.query.get(user_id)
-    recipient = User.query.get(data['recipient'])
+    recipient = User.query.get(request.form.get('recipient_id'))
+    file = request.files.get('media')
 
     if not recipient:
         return jsonify({'error': 'Recipient not found.'}), 404
 
-    message = Message(sender_id=sender.id, recipient_id=recipient.id, body=data['body'])
+    if file is not None:
+        if file.filename == '':
+            return jsonify({'error': 'No selected file'}), 400
+
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            file.save(os.path.join(current_app.config['UPLOAD_MEDIA_FOLDER'], filename))
+        else:
+            return jsonify({'error': 'File type not allowed'}), 400
+
+    message = Message(sender_id=sender.id, recipient_id=recipient.id, body=request.form.get('body') )
+    if file is not None:
+        message.media_url = file.filename
+
     db.session.add(message)
     db.session.commit()
 
-    return jsonify({'message': 'Message sent successfully.'}), 201
+    message_info = {
+        'id': message.id,
+        'timestamp': message.timestamp,
+        'sender_id': message.sender_id,
+        'recipient_id': message.recipient_id,
+        'body': message.body
+    }
+
+    if file is not None:
+        message_info['media_url'] = message.media_url
+
+    return jsonify({'message': message_info}), 201
 
 
 @main.route('/messages', methods=['GET'])
 @jwt_required()
 def get_messages():
+    recipient_id = request.args.get('recipient_id')
+
+    if not recipient_id:
+        return jsonify({'error': 'recipient_id не указан'}), 400
+
     user = User.query.filter_by(id=get_jwt_identity()).first()
+    recipient = User.query.filter_by(id=recipient_id).first()
 
-    if user is None:
-        return jsonify({'error': 'User not found'}), 404
+    if user is None or recipient is None:
+        return jsonify({'error': 'User or recipient is not found'}), 404
 
-    # Получаем входящие сообщения
-    received_messages = Message.query.filter_by(recipient_id=user.id).order_by(Message.timestamp.desc()).all()
-    received = [{
-        'sender': message.sender.username,
-        'body': message.body,
-        'timestamp': message.timestamp
-    } for message in received_messages]
+    messages = Message.query.filter(
+        or_(
+            (Message.sender == user) & (Message.recipient == recipient),
+            (Message.sender == recipient) & (Message.recipient == user)
+        )
+    ).order_by(Message.timestamp.asc()).all()
 
-    # Получаем отправленные сообщения
-    sent_messages = Message.query.filter_by(sender_id=user.id).order_by(Message.timestamp.desc()).all()
-    sent = [{
-        'recipient': message.recipient.username,
-        'body': message.body,
-        'timestamp': message.timestamp
-    } for message in sent_messages]
+    messages_list = []
+
+    for message in messages:
+        message_info = {
+            'id': message.id,
+            'timestamp': message.timestamp,
+            'sender_id': message.sender_id,
+            'recipient_id': message.recipient_id,
+            'body': message.body,
+            "media_url": message.media_url
+        }
+        messages_list.append(message_info)
 
     return jsonify({
-        'received_messages': received,
-        'sent_messages': sent
+        'messages': messages_list,
     }), 200
 
 
@@ -286,7 +318,7 @@ def get_matches():
     user_id = get_jwt_identity()
 
     # Получаем всех пользователей, с которыми есть совпадения
-    matches = Match.query.filter_by(user_id=user_id, is_mutual=True).all()
+    matches = Match.query.filter_by(user_id=user_id, is_mutual=False).all() #FOR DEBUF mutual FALSE
     matched_users = []
     for match in matches:
         matched_info = {

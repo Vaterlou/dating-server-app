@@ -1,6 +1,6 @@
 # gunicorn.conf.py
-workers = 3
-bind = 'localhost:8000'
+workers = 1
+bind = '192.168.101.3:8000'
 timeout = 120
 loglevel = 'debug'
 
