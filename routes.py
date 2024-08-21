@@ -7,8 +7,13 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_user, login_required, logout_user, current_user
 from werkzeug.utils import secure_filename
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from google.oauth2 import id_token
+from google.auth.transport import requests
 
 from sqlalchemy import or_
+from sqlalchemy import func
+from geoalchemy2.functions import ST_DWithin, ST_MakePoint
+from geoalchemy2.functions import ST_X, ST_Y
 
 from models import db
 from models import User
@@ -58,6 +63,10 @@ def login():
         return jsonify({'error': 'Missing fields'}), 400
 
     user = User.query.filter_by(email=email).first()
+
+    if user and user.is_google_user:
+        return jsonify({'error': 'Этот email зарегистрирован через Google. Войдите через Google.'}), 403
+
     if user and user.check_password(password):
         token = create_access_token(identity=user.id)
         if not user.profile:
@@ -67,6 +76,31 @@ def login():
         return jsonify({'token': token, 'user_id': user.id, 'message': 'Login successful!'}), 200
     else:
         return jsonify({'error': 'Invalid email or password'}), 401
+
+
+@main.route('/google-login', methods=['POST'])
+def google_login():
+    googleToken = request.json.get('token')
+    try:
+        # Проверка и декодирование токена
+        idinfo = id_token.verify_oauth2_token(googleToken, requests.Request(), current_app.config['GOOGLE_CLIENT_ID'])
+
+        # Получение данных пользователя
+        user_id = idinfo['sub']
+        email = idinfo['email']
+        name = idinfo.get('name')
+
+        user = User.query.filter_by(email=email).first()
+        if user is None:
+            user = User(username=name, email=email, is_google_user=True)
+            db.session.add(user)
+            db.session.commit()
+
+        token = create_access_token(identity=user.id)
+
+        return jsonify({'token': token, 'user_id': user.id})
+    except ValueError:
+        return jsonify({'error': 'Неверный токен'}), 401
 
 
 # Профиль пользователя
@@ -145,47 +179,47 @@ def profile():
 @main.route('/users', methods=['GET'])
 @jwt_required()
 def users():
-    radius = float(request.args.get('radius', 0))
+    radius = float(request.args.get('radius', 10000)) # Радиус поиска в метрах
 
     user_id = get_jwt_identity()
     user = User.query.get(user_id)
-    current_user_profile = user.profile
 
-    if not current_user_profile:
-        return jsonify({"error": "Profile not found"}), 404
+    user_longitude = ST_X(user.coordinates)
+    user_latitude = ST_Y(user.coordinates)
 
-    current_lat = current_user_profile.latitude
-    current_lon = current_user_profile.longitude
-
-    users = User.query.all()
+    nearby_users = (
+        db.session.query(User)
+        .filter(
+            ST_DWithin(
+                func.ST_Transform(User.coordinates, 4326),
+                func.ST_Transform(ST_MakePoint(user_longitude, user_latitude), 4326),
+                radius
+            )
+        )
+        .all()
+    )
     users_list = []
 
-    for user in users:
-        profile = user.profile  # Предполагается, что у пользователя есть связь с профилем
-        if profile:
-            # Фильтрация по радиусу
-            if radius > 0:
-                if current_lon is not None and current_lat is not None and profile.latitude is not None and profile.longitude is not None:
-                    distance = haversine(current_lat, current_lon, profile.latitude, profile.longitude)
-                    if distance > radius:
-                        continue
+    for user in nearby_users:
+        existing_like = Match.query.filter_by(user_id=user_id, liked_user_id=user.id).first()
+        if existing_like:
+            continue
 
-            existing_like = Match.query.filter_by(user_id=user_id, liked_user_id=user.id).first()
-            if existing_like:
-                continue
+        latitude = ST_Y(user.coordinates)
+        longitude = ST_X(user.coordinates)
 
-            user_info = {
-                'id' : user.id,
-                'username': user.username,
-                'email': user.email,
-                'bio': profile.bio,
-                'age': profile.age,
-                'gender': profile.gender,
-                'profile_picture': profile.profile_picture,
-                'latitude': profile.latitude,
-                'longitude': profile.longitude,
-            }
-            users_list.append(user_info)
+        user_info = {
+            'id' : user.id,
+            'username': user.username,
+            'email': user.email,
+            'bio': profile.bio,
+            'age': profile.age,
+            'gender': profile.gender,
+            'profile_picture': profile.profile_picture,
+            'latitude': latitude,
+            'longitude': longitude,
+        }
+        users_list.append(user_info)
 
     return jsonify({'users': users_list}), 200
 

@@ -2,22 +2,27 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
+from geoalchemy2 import Geometry
+from geoalchemy2.functions import ST_MakePoint
 
 db = SQLAlchemy()
-
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128), nullable=False)
+    password_hash = db.Column(db.String(128))
+    is_google_user = db.Column(db.Boolean, default=False)
+    coordinates = db.Column(Geometry(geometry_type='POINT', srid=4326), default=ST_MakePoint(0, 0), index=True)  # WGS 84
     profile = db.relationship('Profile', backref='user', uselist=False)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+        if self.password:
+            return check_password_hash(self.password_hash, password)
+        return False
 
 
 class Profile(db.Model):
@@ -31,8 +36,6 @@ class Profile(db.Model):
     height = db.Column(db.Integer, nullable=True)
     gender = db.Column(db.String(10), nullable=True)
     profile_picture = db.Column(db.String(100), nullable=True, default='default.jpeg')
-    latitude = db.Column(db.Float)
-    longitude = db.Column(db.Float)
 
 class Message(db.Model):
     id = db.Column(db.Integer, primary_key=True)
