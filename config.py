@@ -2,7 +2,7 @@
 import os
 
 class Config:
-    UPLOAD_PROFILE_FOLDER = 'static/profile_pics'
+    UPLOAD_PROFILE_FOLDER = 'static/profile_pics/'
     UPLOAD_MEDIA_FOLDER = 'static/uploads/'
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'mp4', 'mov'}
     SQLALCHEMY_DATABASE_URI = 'postgresql+psycopg2://datingserver:1234@localhost:5432/datingapp'

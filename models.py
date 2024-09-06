@@ -3,6 +3,7 @@ from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 from geoalchemy2 import Geometry
+from sqlalchemy import func
 from geoalchemy2.functions import ST_MakePoint
 
 db = SQLAlchemy()
@@ -11,16 +12,16 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128))
+    password_hash = db.Column(db.String(256))
     is_google_user = db.Column(db.Boolean, default=False)
-    coordinates = db.Column(Geometry(geometry_type='POINT', srid=4326), default=ST_MakePoint(0, 0), index=True)  # WGS 84
+    coordinates = db.Column(Geometry(geometry_type='POINT', srid=4326), default=func.ST_SetSRID(func.ST_MakePoint(0, 0), 4326), index=True)  # WGS 84
     profile = db.relationship('Profile', backref='user', uselist=False)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
-        if self.password:
+        if self.password_hash:
             return check_password_hash(self.password_hash, password)
         return False
 

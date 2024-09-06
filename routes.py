@@ -14,6 +14,7 @@ from sqlalchemy import or_
 from sqlalchemy import func
 from geoalchemy2.functions import ST_DWithin, ST_MakePoint
 from geoalchemy2.functions import ST_X, ST_Y
+from geoalchemy2 import WKTElement
 
 from models import db
 from models import User
@@ -119,29 +120,40 @@ def profile():
             profile = Profile(user_id=user_id)
             db.session.add(profile)
 
-        if 'avatar' not in request.files:
-            return jsonify({'error': 'No avatar part in the request'}), 400
+        if 'avatar' in request.files:
+            file = request.files['avatar']
 
-        file = request.files['avatar']
+            if file.filename == '':
+                return jsonify({'error': 'No file selected'}), 400
 
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
+            if file and allowed_file(file.filename):
+                filename = secure_filename(file.filename)
+                directory_path = os.path.join(current_app.config['UPLOAD_PROFILE_FOLDER'], str(user_id))
 
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            file_path = os.path.join(current_app.config['UPLOAD_PROFILE_FOLDER'], filename)
-            file.save(file_path)
-            user.profile.profile_picture = filename
-        else:
-            return jsonify({'error': 'Invalid file type'}), 400
+                if not os.path.exists(directory_path):
+                    os.makedirs(directory_path, exist_ok=True)
 
-        profile.bio = request.form.get('bio')
-        profile.age = request.form.get('age')
+                file_path = os.path.join(directory_path, filename)
+                file.save(file_path)
+                profile.profile_picture = filename
+            else:
+                return jsonify({'error': 'Invalid file type'}), 400
+
+        bio = request.form.get('bio')
+        if bio is not None and len(bio) > 0:
+            profile.bio = request.form.get('bio')
+
+        age = request.form.get('age')
+        if age is not None and age.isdigit() and int(age) > 0:
+            profile.age = int(age)
         # profile.nationality = data.get('nationality')
         # profile.height = data.get('height')
-        profile.gender = request.form.get('gender')
-        profile.latitude = request.form.get('latitude')
-        profile.longitude = request.form.get('longitude')
+        if request.form.get('gender') is not None:
+            profile.gender = request.form.get('gender')
+
+        latitude = request.form.get('latitude')
+        longitude = request.form.get('longitude')
+        user.coordinates = WKTElement(f'POINT({longitude} {latitude})', srid=4326)
 
         # country = data.get('country')
         # if country is not None and profile.latitude is not None and profile.longitude is not None:
@@ -168,8 +180,6 @@ def profile():
                 'bio': profile.bio,
                 'age': profile.age,
                 'gender': profile.gender,
-                'latitude': profile.latitude,
-                'longitude': profile.longitude,
                 'profile_picture': profile.profile_picture
             }
             return jsonify(profile_data), 200
@@ -182,17 +192,14 @@ def users():
     radius = float(request.args.get('radius', 10000)) # Радиус поиска в метрах
 
     user_id = get_jwt_identity()
-    user = User.query.get(user_id)
-
-    user_longitude = ST_X(user.coordinates)
-    user_latitude = ST_Y(user.coordinates)
+    curr_user = User.query.get(user_id)
 
     nearby_users = (
         db.session.query(User)
         .filter(
-            ST_DWithin(
+            func.ST_DWithin(
                 func.ST_Transform(User.coordinates, 4326),
-                func.ST_Transform(ST_MakePoint(user_longitude, user_latitude), 4326),
+                func.ST_Transform(curr_user.coordinates, 4326),
                 radius
             )
         )
@@ -201,23 +208,34 @@ def users():
     users_list = []
 
     for user in nearby_users:
+        if user.id == curr_user.id:
+            continue
+
         existing_like = Match.query.filter_by(user_id=user_id, liked_user_id=user.id).first()
         if existing_like:
             continue
 
-        latitude = ST_Y(user.coordinates)
-        longitude = ST_X(user.coordinates)
+        distance = db.session.query(
+            func.ST_Distance(
+                func.ST_Transform(user.coordinates, 4326),
+                func.ST_Transform(curr_user.coordinates, 4326)
+            )
+        ).scalar()
+
+        latitude = db.session.execute(func.ST_Y(user.coordinates)).scalar()
+        longitude = db.session.execute(func.ST_X(user.coordinates)).scalar()
 
         user_info = {
             'id' : user.id,
             'username': user.username,
             'email': user.email,
-            'bio': profile.bio,
-            'age': profile.age,
-            'gender': profile.gender,
-            'profile_picture': profile.profile_picture,
+            'bio': user.profile.bio,
+            'age': user.profile.age,
+            'gender': user.profile.gender,
+            'profile_picture': user.profile.profile_picture,
             'latitude': latitude,
             'longitude': longitude,
+            'distance': distance,
         }
         users_list.append(user_info)
 
@@ -241,7 +259,13 @@ def send_message():
 
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
-            file.save(os.path.join(current_app.config['UPLOAD_MEDIA_FOLDER'], filename))
+            directory_path = os.path.join(current_app.config['UPLOAD_MEDIA_FOLDER'], str(user_id))
+
+            if not os.path.exists(directory_path):
+                os.makedirs(directory_path, exist_ok=True)
+
+            file_path = os.path.join(directory_path, filename)
+            file.save(file_path)
         else:
             return jsonify({'error': 'File type not allowed'}), 400
 
@@ -352,7 +376,7 @@ def get_matches():
     user_id = get_jwt_identity()
 
     # Получаем всех пользователей, с которыми есть совпадения
-    matches = Match.query.filter_by(user_id=user_id, is_mutual=False).all() #FOR DEBUF mutual FALSE
+    matches = Match.query.filter_by(user_id=user_id, is_mutual=True).all() #FOR DEBUF mutual FALSE
     matched_users = []
     for match in matches:
         matched_info = {
