@@ -9,5 +9,5 @@ class Config:
     ALLOWED_COUNTRIES = ["Russia", "Indonesia"]
     # ALLOWED_CITIES
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SECRET_KEY = os.urandom(24)  # Секретный ключ для сессий
+    JWT_SECRET_KEY = 'SECRET_KEY' #os.urandom(24)  # Секретный ключ для сессий
     GOOGLE_CLIENT_ID = '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'
